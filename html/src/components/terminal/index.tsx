@@ -26,6 +26,7 @@ const enum Command {
     OUTPUT = '0',
     SET_WINDOW_TITLE = '1',
     SET_PREFERENCES = '2',
+    SHOW_MESSAGE = '3',
 
     // client side
     INPUT = '0',
@@ -203,7 +204,10 @@ export class Xterm extends Component<Props> {
             this.onTerminalResize(dims); // may not be triggered by terminal.resize
         } else {
             this.reconnect = true;
-            fitAddon.fit();
+            // Wait before trying to fit the window. This is needed since the
+            // ttyd could send us a "fontSize" option after we have already
+            // initialized the Terminal object.
+            this.onWindowResize();
         }
 
         terminal.focus();
@@ -233,7 +237,7 @@ export class Xterm extends Component<Props> {
 
     @bind
     private onSocketData(event: MessageEvent) {
-        const { terminal, textDecoder, zmodemAddon } = this;
+        const { fitAddon, terminal, textDecoder, overlayAddon, zmodemAddon } = this;
         const rawData = event.data as ArrayBuffer;
         const cmd = String.fromCharCode(new Uint8Array(rawData)[0]);
         const data = rawData.slice(1);
@@ -255,8 +259,19 @@ export class Xterm extends Component<Props> {
                     } else {
                         console.log(`[ttyd] option: ${key}=${preferences[key]}`);
                         terminal.setOption(key, preferences[key]);
+                        if (key === 'fontSize') {
+                          console.log(`[ttyd] will re-fit the window`);
+                          this.onWindowResize();
+                        }
                     }
                 });
+                break;
+            case Command.SHOW_MESSAGE:
+                const msg = textDecoder.decode(data);
+                console.log(`[ttyd] msg: ${msg}`);
+                setTimeout(() => {
+                    overlayAddon.showOverlay(msg);
+                }, 500);
                 break;
             default:
                 console.warn(`[ttyd] unknown command: ${cmd}`);

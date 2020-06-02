@@ -65,11 +65,13 @@ static const struct option options[] = {
     {"max-clients", required_argument, NULL, 'm'},
     {"once", no_argument, NULL, 'o'},
     {"browser", no_argument, NULL, 'B'},
+    {"min-cols", required_argument, NULL, 'W'},
+    {"min-rows", required_argument, NULL, 'H'},
     {"debug", required_argument, NULL, 'd'},
     {"version", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {NULL, 0, 0, 0}};
-static const char *opt_string = "p:i:c:u:g:s:I:b:6aSC:K:A:Rt:T:Om:oBd:vh";
+static const char *opt_string = "p:i:c:u:g:s:I:b:6aSC:K:A:Rt:T:Om:oBW:H:d:vh";
 
 static void print_help() {
   // clang-format off
@@ -102,6 +104,8 @@ static void print_help() {
           "    -C, --ssl-cert          SSL certificate file path\n"
           "    -K, --ssl-key           SSL key file path\n"
           "    -A, --ssl-ca            SSL CA file path for client certificate verification\n"
+          "    -W, --min-cols          If specified, forces PTY column count to be at least this value\n"
+          "    -H, --min-rows          If specified, forces PTY row count to be at least this value\n"
           "    -d, --debug             Set log level (default: 7)\n"
           "    -v, --version           Print the version and exit\n"
           "    -h, --help              Print this text and exit\n\n"
@@ -428,6 +432,12 @@ int main(int argc, char **argv) {
               obj != NULL ? obj : json_object_new_string(value));
         }
         break;
+      case 'W':
+        server->min_cols = atoi(optarg);
+        break;
+      case 'H':
+        server->min_rows = atoi(optarg);
+        break;
       default:
         print_help();
         return -1;
@@ -438,6 +448,16 @@ int main(int argc, char **argv) {
 
   if (server->command == NULL || strlen(server->command) == 0) {
     fprintf(stderr, "ttyd: missing start command\n");
+    return -1;
+  }
+
+  if (server->min_cols < 0) {
+    fprintf(stderr, "ttyd: invalid min-cols flag value\n");
+    return -1;
+  }
+
+  if (server->min_rows < 0) {
+    fprintf(stderr, "ttyd: invalid min-rows flag value\n");
     return -1;
   }
 

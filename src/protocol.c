@@ -186,7 +186,8 @@ static int spawn_process(struct pss_tty *pss) {
   fd_set_cloexec(lws_get_socket_fd(pss->wsi));
 
   // create process with pseudo-tty
-  proc->pid = pty_fork(&proc->pty, argv[0], argv, server->terminal_type);
+  proc->pid = pty_fork(&proc->pty, argv[0], argv, server->terminal_type, server->min_cols,
+                       server->min_rows);
   if (proc->pid < 0) {
     lwsl_err("pty_fork: %d (%s)\n", errno, strerror(errno));
     return 1;
@@ -358,7 +359,9 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       switch (command) {
         case INPUT:
           if (proc->pty == 0) break;
-          if (server->readonly) return 0;
+          // TODO(girts): looks like upstream bug:
+          // if (server->readonly) return 0;
+          if (server->readonly) break;
 
           char *data = xmalloc(pss->len - 1);
           memcpy(data, pss->buffer + 1, pss->len - 1);
@@ -375,12 +378,28 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
           break;
         case RESIZE_TERMINAL: {
           int cols, rows;
-          if (parse_window_size(pss, &cols, &rows)) {
-            if (pty_resize(proc->pty, cols, rows) < 0) {
-              lwsl_err("pty_resize: %d (%s)\n", errno, strerror(errno));
-            }
+          if (!parse_window_size(pss, &cols, &rows)) {
+            lwsl_notice("failed to parse window size\n");
+            break;
           }
-        } break;
+          lwsl_notice("got resize request: cols (%d), rows (%d)\n", cols, rows);
+          if ((server->min_cols && (cols < server->min_cols)) ||
+              (server->min_rows && (rows < server->min_rows))) {
+            lwsl_notice("ignoring resize request as dimensions are too small\n");
+
+            char msg[] = ".WINDOW IS TOO SMALL";
+            msg[0] = SHOW_MESSAGE;
+            if (lws_write(wsi, msg, sizeof(msg), LWS_WRITE_BINARY) < 0) {
+              lwsl_err("failed to write message\n");
+            }
+
+            break;
+          }
+          if (pty_resize(proc->pty, cols, rows) < 0) {
+            lwsl_err("pty_resize: %d (%s)\n", errno, strerror(errno));
+          }
+          break;
+        }
         case JSON_DATA:
           if (proc->pid > 0) break;
           if (server->credential != NULL) {

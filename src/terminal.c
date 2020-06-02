@@ -14,15 +14,22 @@
 #include <pty.h>
 #endif
 
+#include "terminal.h"
 #include "utils.h"
 
-pid_t pty_fork(int *pty, const char *file, char *const argv[], const char *term) {
+pid_t pty_fork(int *pty, const char *file, char *const argv[], const char *term, int min_cols,
+               int min_rows) {
   pid_t pid = forkpty(pty, NULL, NULL, NULL);
 
   if (pid < 0) {
     return pid;
   } else if (pid == 0) {
     setenv("TERM", term, true);
+    // If min_cols and min_rows was specified, force the window size to those
+    // values initially.
+    if (min_cols && min_rows) {
+      pty_resize(*pty, min_cols, min_rows);
+    }
     int ret = execvp(file, argv);
     if (ret < 0) {
       perror("execvp failed\n");
