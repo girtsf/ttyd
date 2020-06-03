@@ -87,7 +87,8 @@ export class Xterm extends Component<Props> {
         this.connect();
 
         window.addEventListener('resize', this.onWindowResize);
-        window.addEventListener('beforeunload', this.onWindowUnload);
+        // NOTE(girts): we remove this to prevent a pop-up when closing the window.
+        // window.addEventListener('beforeunload', this.onWindowUnload);
     }
 
     componentWillUnmount() {
@@ -95,7 +96,8 @@ export class Xterm extends Component<Props> {
         this.terminal.dispose();
 
         window.removeEventListener('resize', this.onWindowResize);
-        window.removeEventListener('beforeunload', this.onWindowUnload);
+        // NOTE(girts): we remove this to prevent a pop-up when closing the window.
+        // window.removeEventListener('beforeunload', this.onWindowUnload);
     }
 
     render({ id }: Props) {
