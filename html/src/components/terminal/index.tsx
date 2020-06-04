@@ -55,6 +55,8 @@ export class Xterm extends Component<Props> {
     private backoff: backoff.Backoff;
     private backoffLock = false;
     private reconnect = false;
+    private cols = 0;
+    private rows = 0;
 
     constructor(props: Props) {
         super(props);
@@ -86,7 +88,7 @@ export class Xterm extends Component<Props> {
         this.openTerminal();
         this.connect();
 
-        window.addEventListener('resize', this.onWindowResize);
+        // window.addEventListener('resize', this.onWindowResize);
         // NOTE(girts): we remove this to prevent a pop-up when closing the window.
         // window.addEventListener('beforeunload', this.onWindowUnload);
     }
@@ -95,7 +97,7 @@ export class Xterm extends Component<Props> {
         this.socket.close();
         this.terminal.dispose();
 
-        window.removeEventListener('resize', this.onWindowResize);
+        // window.removeEventListener('resize', this.onWindowResize);
         // NOTE(girts): we remove this to prevent a pop-up when closing the window.
         // window.removeEventListener('beforeunload', this.onWindowUnload);
     }
@@ -153,11 +155,11 @@ export class Xterm extends Component<Props> {
         this.terminal = new Terminal(this.props.options);
         const { terminal, container, fitAddon, overlayAddon } = this;
         window.term = terminal as TtydTerminal;
-        window.term.fit = () => {
-            this.fitAddon.fit();
-        };
+        // window.term.fit = () => {
+        //     this.fitAddon.fit();
+        // };
 
-        terminal.loadAddon(fitAddon);
+        // terminal.loadAddon(fitAddon);
         terminal.loadAddon(overlayAddon);
         terminal.loadAddon(new WebLinksAddon());
         terminal.loadAddon(this.zmodemAddon);
@@ -168,7 +170,7 @@ export class Xterm extends Component<Props> {
             }
         });
         terminal.onData(this.onTerminalData);
-        terminal.onResize(this.onTerminalResize);
+        // terminal.onResize(this.onTerminalResize);
         if (document.queryCommandSupported && document.queryCommandSupported('copy')) {
             terminal.onSelectionChange(() => {
                 if (terminal.getSelection() === '') return;
@@ -200,10 +202,12 @@ export class Xterm extends Component<Props> {
         socket.send(textEncoder.encode(JSON.stringify({ AuthToken: this.token })));
 
         if (this.reconnect) {
-            const dims = fitAddon.proposeDimensions();
+            // const dims = fitAddon.proposeDimensions();
             terminal.reset();
-            terminal.resize(dims.cols, dims.rows);
-            this.onTerminalResize(dims); // may not be triggered by terminal.resize
+            if (this.rows && this.cols) {
+              terminal.resize(this.cols, this.rows);
+            }
+            // this.onTerminalResize(dims); // may not be triggered by terminal.resize
         } else {
             this.reconnect = true;
             // Wait before trying to fit the window. This is needed since the
@@ -243,6 +247,7 @@ export class Xterm extends Component<Props> {
         const rawData = event.data as ArrayBuffer;
         const cmd = String.fromCharCode(new Uint8Array(rawData)[0]);
         const data = rawData.slice(1);
+        let resize = false;
 
         switch (cmd) {
             case Command.OUTPUT:
@@ -258,13 +263,21 @@ export class Xterm extends Component<Props> {
                     if (key === 'rendererType' && preferences[key] === 'webgl') {
                         terminal.loadAddon(new WebglAddon());
                         console.log(`[ttyd] WebGL renderer enabled`);
+                    } else if (key == 'rows') {
+                      this.rows = parseInt(preferences[key]);
+                      resize = true;
+                      console.log(`[ttyd] rows: ${this.rows}`);
+                    } else if (key == 'cols') {
+                      this.cols = parseInt(preferences[key]);
+                      resize = true;
+                      console.log(`[ttyd] cols: ${this.cols}`);
                     } else {
                         console.log(`[ttyd] option: ${key}=${preferences[key]}`);
                         terminal.setOption(key, preferences[key]);
-                        if (key === 'fontSize') {
-                          console.log(`[ttyd] will re-fit the window`);
-                          this.onWindowResize();
-                        }
+                        // if (key === 'fontSize') {
+                        //   console.log(`[ttyd] will re-fit the window`);
+                        //   this.onWindowResize();
+                        // }
                     }
                 });
                 break;
@@ -278,6 +291,9 @@ export class Xterm extends Component<Props> {
             default:
                 console.warn(`[ttyd] unknown command: ${cmd}`);
                 break;
+        }
+        if (resize && this.rows && this.cols) {
+          terminal.resize(this.cols, this.rows);
         }
     }
 
